@@ -33,6 +33,7 @@
 
 /* Syscall wrappers */
 int Open(const char *file_name, mode_t arg_flags, ...);
+ssize_t IoRead(int fd, void *usrbuf, size_t n);
 ssize_t Write(int fd, const void *buf, size_t count);
 ssize_t Read(int fd, void *buf, size_t count);
 off_t Lseek(int fd, off_t offset, int whence);

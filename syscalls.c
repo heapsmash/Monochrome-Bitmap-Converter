@@ -67,15 +67,22 @@ int Open(const char *file_name, mode_t arg_flags, ...)
 }
 
 
-ssize_t Write(int fd, const void *buf, size_t count)
+ssize_t IoRead(int fd, void *usrbuf, size_t n)
 {
-	ssize_t n_written = syscall(SYS_write, fd, buf, count);
+	size_t nleft = n;
+	ssize_t nread;
+	char *bufp = usrbuf;
 
-	if (n_written < 0) {
-		PRINT_ERRNO_AND_EXIT("write error");
+	while (nleft > 0) {
+		if ((nread = Read(fd, bufp, nleft)) < 0) {
+			if (nread == -1) /* Interrupted by sig handler return and call Read() again */
+				nread = 0;
+		} else if (nread == 0)
+			break;
+		nleft -= nread;
+		bufp += nread;
 	}
-
-	return n_written;
+	return (n - nleft);
 }
 
 
@@ -83,11 +90,27 @@ ssize_t Read(int fd, void *buf, size_t count)
 {
 	ssize_t n_read = syscall(SYS_read, fd, buf, count);
 
-	if (n_read < 0) {
-		PRINT_ERRNO_AND_EXIT("Read error");
-	}
+	if (n_read >= 0)
+		return n_read;
 
-	return n_read;
+	if (errno == EINTR) /* Interrupted by sig handler return */
+		return -1;
+
+	PRINT_ERRNO_AND_EXIT("Read error"); /* errno set by Read() */
+}
+
+
+ssize_t Write(int fd, const void *buf, size_t count)
+{
+	ssize_t n_written = syscall(SYS_write, fd, buf, count);
+
+	if (n_written >= 0)
+		return n_written;
+
+	if (errno == EINTR) /* Interrupted by sig handler return */
+		return -1;
+
+	PRINT_ERRNO_AND_EXIT("Write error"); /* errno set by Write() */
 }
 
 
