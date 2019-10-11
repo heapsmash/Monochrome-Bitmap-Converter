@@ -1,4 +1,4 @@
-/*	Copyright (c) 2019, Tofu von Helmholtz aka Michael S. Walker
+/*	Copyright (c) 2019, Michael S. Walker
  *	All Rights Reserved in all Federations, including Alpha Centauris.
  *
  *	Redistribution and use in source and binary forms, with or without
@@ -33,28 +33,57 @@
 #include "errlib.h" /* for CHECK_SIZE */
 #include <errno.h>  /* for CHECK_SIZE */
 
-#define MAX_DATA 40000
-
 #if defined(__linux__) && defined(__x86_64__)
 #define __FILE_MAX__ FILENAME_MAX
 #define __ARRAY_MAX__ 25
-#else
+#else	/* future implementation to run on atari ST */
 #define __FILE_MAX__ 10 /* Size depends on system, i'm to lazy to check the Atari ST sizes ... RTFM & replace */
 #define __ARRAY_MAX__ __FILE_MAX__
 #endif
-
-char *g_file_name_to_save;
-char *g_file_name_to_read;
-char *g_array_name_to_store;
-
-const char *g_usage = "g_usage: ./bmp_rip -f <file_name_to_read.bmp> -a <array_name_to_store> -s <file_name_to_save.c>";
-
-#define OUTPUT_TO_FD 1 /* 1 for testing */
 
 #define CHECK_SIZE(arg, x) if (strlen((arg)) >= (x)) { \
     errno = 36; \
     PRINT_ERRNO_AND_RETURN("optarg error"); \
     }
+
+const char *g_header_names[] = {
+		"type:",
+		"size:",
+		"reserved1:",
+		"reserved2:",
+		"offset:",
+		"dib_header_size:",
+		"width_px:",
+		"height_px:",
+		"num_planes:",
+		"bits_per_pixel:",
+		"compression:",
+		"image_size_bytes:",
+		"x_resolution_ppm:",
+		"y_resolution_ppm:",
+		"num_colors:",
+		"important_colors:"
+};
+
+const char *g_header_description[] = {
+		"(Magic identifier: 0x4d42)",
+		"(File size in bytes)",
+		"(NOT USED)",
+		"(NOT USED)",
+		"(Offset to image data [54 bytes])",
+		"(DIB Header size in bytes [40 bytes])",
+		"(Width of the image)",
+		"(Height of the image)",
+		"(Number of color planes)",
+		"(Bits per pixel)",
+		"(Compression type)",
+		"(Image size in bytes)",
+		"(Pixels per meter)",
+		"(Pixels per meter)",
+		"(Number of colors)",
+		"(Important colors)"
+};
+const char *g_usage = "g_usage: ./bit_rip [-n number of columns to write] -f <input filename . bmp>  -a <array name for bitmap> -s <output file name . c>";
 
 typedef struct _BMPHeader {    /* Total: 54 bytes */
 	uint16_t type;             /* Magic identifier: 0x4d42 */
@@ -75,16 +104,15 @@ typedef struct _BMPHeader {    /* Total: 54 bytes */
 	uint32_t important_colors; /* Important colors */
 } BMPHeader;
 
-typedef struct _BMPImage {
+typedef struct _BMPImageTools {
 	BMPHeader header;
-	char data[MAX_DATA];
-} BMPImage;
+	size_t ncols_per_row;
+	int bitmap_to_read_fd, c_file_to_write_fd;
+	char *file_name_to_save, *file_name_to_read, *array_name_to_store;
+} BitRipTools;
 
-void PrintBmpHeader(BMPHeader header);
-void FillBMPHeader(int fd, BMPHeader *bmp);
-void WriteDataBigEndian(int bitmap_to_read_fd, int c_file_to_write_fd, BMPImage *image);
-void ReplaceSpaces(char *str);
-
-BMPImage ReadBmp(int fd);
+void WriteCommentToFile(BitRipTools data);
+void WriteArrayToFile(BitRipTools *data);
+void ReadBitmapHeader(BitRipTools *data);
 
 #endif //BMP_RIP_BMP_H
