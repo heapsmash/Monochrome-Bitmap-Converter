@@ -34,67 +34,100 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include "lib/errlib.h"
+
 #include "syscalls.h"
+#include "lib/errlib.h"
+#include "lib/endianlib.h"
+
 #include "bmp.h"
 
 
 int main(int argc, char *argv[], char *envp[])
 {
 	int opt, fd;
-	BMPHeader header;
+	BMPImage bitmap;
 	char *file_name = NULL;
-	int endian = 1; /* default 1 means big endian */
 
-	while ((opt = getopt(argc, argv, "e:f:")) != -1) {
+	g_endian = 1; /* default 1 means big endian */
+	while ((opt = getopt(argc, argv, "e:f:a:")) != -1) {
 		switch (opt) {
 			case 'f':
 				file_name = optarg;
 				break;
 			case 'e':
 				if (!memcmp("little", optarg, strlen("little")))
-					endian = 0;
+					g_endian = 0;
 				break;
 			default :
-			PRINT_ERR_AND_RETURN("%s", usage);
+			PRINT_ERR_AND_RETURN("%s", g_usage);
 		}
 	}
 
 	if (file_name == NULL) {
-		PRINT_ERR_AND_RETURN("%s", usage);
+		PRINT_ERR_AND_RETURN("%s", g_usage);
 	}
 
 	fd = Open(file_name, O_RDONLY, 0);
-	header = ReadBmpHeader(fd);
+	bitmap = ReadBmp(fd);
 
-	PrintBitmapDetails(header);
-
+	PrintBitmapDetails(bitmap.header);
+	ReadBmpImageLittleEndian(fd, &bitmap);
 	return 0;
 }
 
 
-BMPHeader ReadBmpHeader(int fd)
+BMPImage ReadBmp(int fd)
 {
-	BMPHeader bmp;
+	BMPImage img;
 
-	Read(fd, &bmp.type, 2);              /* Magic identifier: 0x4d42 */
-	Read(fd, &bmp.size, 4);              /* File size in bytes */
-	Read(fd, &bmp.reserved1, 2);         /* NOT USED */
-	Read(fd, &bmp.reserved2, 2);         /* NOT USED */
-	Read(fd, &bmp.offset, 4);            /* Offset to image data in bytes from beginning of file (54 bytes) */
-	Read(fd, &bmp.dib_header_size, 4);   /* DIB Header size in bytes (40 bytes) */
-	Read(fd, &bmp.width_px, 4);          /* Width of the image */
-	Read(fd, &bmp.height_px, 4);         /* Height of the image */
-	Read(fd, &bmp.num_planes, 2);        /* Number of color planes */
-	Read(fd, &bmp.bits_per_pixel, 2);    /* Bits per pixel */
-	Read(fd, &bmp.compression, 4);       /* Compression type */
-	Read(fd, &bmp.image_size_bytes, 4);  /* Image size in bytes */
-	Read(fd, &bmp.x_resolution_ppm, 4);  /* Pixels per meter */
-	Read(fd, &bmp.y_resolution_ppm, 4);  /* Pixels per meter */
-	Read(fd, &bmp.num_colors, 4);        /* Number of colors */
-	Read(fd, &bmp.important_colors, 4);  /* Important colors */
+	FillBMPHeader(fd, &img.header);
+	return img;
+}
 
-	return bmp;
+
+void ReadBmpImageLittleEndian(int fd, BMPImage *image)
+{
+	int i;
+	uint32_t hex_image_data[image->header.height_px];
+
+	lseek(fd, image->header.offset, SEEK_SET);
+
+	for (i = image->header.height_px - 1; i >= 0; i--) {
+		Read(fd, &hex_image_data[i], 4);
+		hex_image_data[i] = Swap2Bytes(~hex_image_data[i]);
+	}
+
+	for (i = 0; i < image->header.height_px; i++) {
+		printf("0x%x, ", (uint16_t) hex_image_data[i]);
+	}
+}
+
+
+BMPImage ReadBmpImageBigEndian(int fd)
+{
+
+}
+
+
+void FillBMPHeader(int fd, BMPHeader *bmp)
+{
+	/* (54 bytes) */
+	IoRead(fd, &bmp->type, 2);              /* Magic identifier: 0x4d42 */
+	IoRead(fd, &bmp->size, 4);              /* File size in bytes */
+	IoRead(fd, &bmp->reserved1, 2);         /* NOT USED */
+	IoRead(fd, &bmp->reserved2, 2);         /* NOT USED */
+	IoRead(fd, &bmp->offset, 4);            /* Offset to image data in bytes from beginning of file */
+	IoRead(fd, &bmp->dib_header_size, 4);   /* DIB Header size in bytes (40 bytes) */
+	IoRead(fd, &bmp->width_px, 4);          /* Width of the image */
+	IoRead(fd, &bmp->height_px, 4);         /* Height of the image */
+	IoRead(fd, &bmp->num_planes, 2);        /* Number of color planes */
+	IoRead(fd, &bmp->bits_per_pixel, 2);    /* Bits per pixel */
+	IoRead(fd, &bmp->compression, 4);       /* Compression type */
+	IoRead(fd, &bmp->image_size_bytes, 4);  /* Image size in bytes */
+	IoRead(fd, &bmp->x_resolution_ppm, 4);  /* Pixels per meter */
+	IoRead(fd, &bmp->y_resolution_ppm, 4);  /* Pixels per meter */
+	IoRead(fd, &bmp->num_colors, 4);        /* Number of colors */
+	IoRead(fd, &bmp->important_colors, 4);  /* Important colors */
 }
 
 

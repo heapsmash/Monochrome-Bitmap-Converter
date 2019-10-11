@@ -31,7 +31,16 @@
 
 #include <stdint.h>
 
-const char *usage = "usage: ./%s [-e] <endian> -f <file_name.bmp>";
+#if defined(__linux__) && defined(__x86_64__)
+#define __FILE_MAX__ FILENAME_MAX
+char g_save_file_name[__FILE_MAX__];
+#else
+#define __FILE_MAX__ 10 /* Size depends on system, i'm to lazy to check the Atari ST sizes ... RTFM */
+char g_save_file_name[__FILE_MAX__];
+#endif
+
+const char *g_usage = "g_usage: ./%s [-h] [-e] -f <file_name.bmp> -a <array_name_to_export> -s <name_to_save.c>";
+int g_endian;
 
 typedef struct _BMPHeader {    /* Total: 54 bytes */
 	uint16_t type;             /* Magic identifier: 0x4d42 */
@@ -52,7 +61,14 @@ typedef struct _BMPHeader {    /* Total: 54 bytes */
 	uint32_t important_colors; /* Important colors */
 } BMPHeader;
 
-BMPHeader ReadBmpHeader(int fd);
+typedef struct _BMPImage {
+	BMPHeader header;
+	unsigned char *data;
+} BMPImage;
+
 void PrintBitmapDetails(BMPHeader header);
+void FillBMPHeader(int fd, BMPHeader *bmp);
+void ReadBmpImageLittleEndian(int fd, BMPImage *image);
+BMPImage ReadBmp(int fd);
 
 #endif //BMP_RIP_BMP_H
