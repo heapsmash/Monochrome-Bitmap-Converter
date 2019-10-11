@@ -1,5 +1,5 @@
 /*	Copyright (c) 2019, Tofu von Helmholtz aka Michael S. Walker
- *	All rights reserved.
+ *	All Rights Reserved in all Federations, including Alpha Centauris.
  *
  *	Redistribution and use in source and binary forms, with or without
  *	modification, are permitted provided that the following conditions are met:
@@ -38,7 +38,7 @@
 #include <fcntl.h>
 #include <stdarg.h>
 #include <unistd.h>
-#include "lib/errlib.h"
+#include "errlib.h"
 #include "syscalls.h"
 
 
@@ -60,7 +60,7 @@ int Open(const char *file_name, mode_t arg_flags, ...)
 
 	fd = (int) syscall(SYS_open, file_name, arg_flags, mode);
 	if (fd < 0) {
-		PRINT_ERRNO_AND_EXIT("open error");
+		PRINT_ERRNO_AND_EXIT("open error")
 	}
 
 	return fd;
@@ -96,7 +96,7 @@ ssize_t Read(int fd, void *buf, size_t count)
 	if (errno == EINTR) /* Interrupted by sig handler return */
 		return -1;
 
-	PRINT_ERRNO_AND_EXIT("Read error"); /* errno set by Read() */
+	PRINT_ERRNO_AND_EXIT("Read error") /* errno set by Read() */
 }
 
 
@@ -110,7 +110,7 @@ ssize_t Write(int fd, const void *buf, size_t count)
 	if (errno == EINTR) /* Interrupted by sig handler return */
 		return -1;
 
-	PRINT_ERRNO_AND_EXIT("Write error"); /* errno set by Write() */
+	PRINT_ERRNO_AND_EXIT("Write error") /* errno set by Write() */
 }
 
 
@@ -118,7 +118,7 @@ off_t Lseek(int fd, off_t offset, int whence)
 {
 	off_t result_offset = syscall(SYS_lseek, fd, offset, whence);
 	if (offset < 0) {
-		PRINT_ERRNO_AND_EXIT("lseek error");
+		PRINT_ERRNO_AND_EXIT("lseek error")
 	}
 
 	return result_offset;
@@ -128,11 +128,19 @@ off_t Lseek(int fd, off_t offset, int whence)
 void Close(int fd)
 {
 	if ((int) syscall(SYS_close, fd) < 0) {
-		PRINT_ERRNO_AND_EXIT("close error");
+		PRINT_ERRNO_AND_EXIT("close error")
 	}
 }
 
 
-#include "syscalls.h"
+void Print(int file_handle, const char *fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	vdprintf(file_handle, fmt, ap);
+	va_end(ap);
+}
+
 
 #pragma clang diagnostic pop

@@ -1,5 +1,5 @@
 /*	Copyright (c) 2019, Tofu von Helmholtz aka Michael S. Walker
- *	All rights reserved.
+ *	All Rights Reserved in all Federations, including Alpha Centauris.
  *
  *	Redistribution and use in source and binary forms, with or without
  *	modification, are permitted provided that the following conditions are met:
@@ -26,20 +26,35 @@
  *	either expressed or implied, of the BITMAP ENDIAN project.
  */
 
-#ifndef BMP_RIP_ERRLIB_H
-#define BMP_RIP_ERRLIB_H
+#ifndef BMP_RIP_ENDIANLIB_H
+#define BMP_RIP_ENDIANLIB_H
 
-#define ERR(format, ...) fprintf(stderr, "-> error in %s() line %d\n"format"\n", __func__, __LINE__, ##__VA_ARGS__)
-#define ERRNO(format, ...) fprintf(stderr, "-> error in %s() line %d\n"format": %s\n", __func__, __LINE__, ##__VA_ARGS__, strerror(errno))
+#include <endian.h>
 
-#define PRINT_ERRNO_AND_RETURN(format, ...) ERRNO(format, ##__VA_ARGS__); \
-        return(EXIT_FAILURE)
-#define PRINT_ERRNO_AND_EXIT(format, ...) ERRNO(format, ##__VA_ARGS__); \
-        exit(EXIT_FAILURE)
+#if __BYTE_ORDER == __BIG_ENDIAN
 
-#define PRINT_ERR_AND_RETURN(format, ...) ERR(format, ##__VA_ARGS__); \
-        return(EXIT_FAILURE)
-#define PRINT_ERR_AND_EXIT(format, ...) ERR(format, ##__VA_ARGS__); \
-        exit(EXIT_FAILURE)
+/* No translation needed for big endian system */
+#define Swap2Bytes(val) val
+#define Swap4Bytes(val) val
+#define Swap8Bytes(val) val
+#else
 
-#endif //BMP_RIP_ERRLIB_H
+/* Swap 2 byte, 16 bit values: */
+#define Swap2Bytes(val) \
+ ( (((val) >> 8) & 0x00FF) | (((val) << 8) & 0xFF00) )
+
+/* Swap 4 byte, 32 bit values: */
+#define Swap4Bytes(val) \
+ ( (((val) >> 24) & 0x000000FF) | (((val) >>  8) & 0x0000FF00) | \
+   (((val) <<  8) & 0x00FF0000) | (((val) << 24) & 0xFF000000) )
+
+/* Swap 8 byte, 64 bit values: */
+
+#define Swap8Bytes(val) \
+ ( (((val) >> 56) & 0x00000000000000FF) | (((val) >> 40) & 0x000000000000FF00) | \
+   (((val) >> 24) & 0x0000000000FF0000) | (((val) >>  8) & 0x00000000FF000000) | \
+   (((val) <<  8) & 0x000000FF00000000) | (((val) << 24) & 0x0000FF0000000000) | \
+   (((val) << 40) & 0x00FF000000000000) | (((val) << 56) & 0xFF00000000000000) )
+#endif
+
+#endif //BMP_RIP_ENDIANLIB_H

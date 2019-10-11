@@ -1,5 +1,5 @@
 /*	Copyright (c) 2019, Tofu von Helmholtz aka Michael S. Walker
- *	All rights reserved.
+ *	All Rights Reserved in all Federations, including Alpha Centauris.
  *
  *	Redistribution and use in source and binary forms, with or without
  *	modification, are permitted provided that the following conditions are met:
@@ -34,44 +34,52 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "syscalls.h"
-#include "lib/errlib.h"
-#include "lib/endianlib.h"
+#include "errlib.h"
+#include "endianlib.h"
 
 #include "bmp.h"
 
 
 int main(int argc, char *argv[], char *envp[])
 {
-	int opt, fd;
+	int opt, bitmap_to_read_fd, c_file_to_write_fd;
 	BMPImage bitmap;
-	char *file_name = NULL;
 
-	g_endian = 1; /* default 1 means big endian */
-	while ((opt = getopt(argc, argv, "e:f:a:")) != -1) {
+	g_file_name_to_read = g_array_name_to_store = g_file_name_to_save = NULL;
+	while ((opt = getopt(argc, argv, "f:a:s:")) != -1) {
 		switch (opt) {
 			case 'f':
-				file_name = optarg;
+				CHECK_SIZE(optarg, __FILE_MAX__)
+				g_file_name_to_read = optarg; /* the file_name.bmp to extract */
 				break;
-			case 'e':
-				if (!memcmp("little", optarg, strlen("little")))
-					g_endian = 0;
+			case 'a':
+				CHECK_SIZE(optarg, __ARRAY_MAX__)
+				g_array_name_to_store = optarg; /* the array name */
+				break;
+			case 's':
+				CHECK_SIZE(optarg, __FILE_MAX__)
+				g_file_name_to_save = optarg; /* the file_name.c to save (.c must be included in the name) */
 				break;
 			default :
-			PRINT_ERR_AND_RETURN("%s", g_usage);
+			PRINT_ERR_AND_RETURN("%s", g_usage)
 		}
 	}
 
-	if (file_name == NULL) {
-		PRINT_ERR_AND_RETURN("%s", g_usage);
+	/* if NULL argv was left out */
+	if (!g_file_name_to_read || !g_array_name_to_store || !g_file_name_to_save) {
+		PRINT_ERR_AND_RETURN("%s", g_usage)
 	}
 
-	fd = Open(file_name, O_RDONLY, 0);
-	bitmap = ReadBmp(fd);
+	bitmap_to_read_fd = Open(g_file_name_to_read, O_RDONLY, 0);
+	c_file_to_write_fd = Open(g_file_name_to_save, O_RDWR | O_CREAT | O_TRUNC, 0644);
 
-	PrintBitmapDetails(bitmap.header);
-	ReadBmpImageLittleEndian(fd, &bitmap);
+	bitmap = ReadBmp(bitmap_to_read_fd);
+	PrintBmpHeader(bitmap.header);
+	WriteDataBigEndian(bitmap_to_read_fd, c_file_to_write_fd, &bitmap);
+
 	return 0;
 }
 
@@ -79,79 +87,95 @@ int main(int argc, char *argv[], char *envp[])
 BMPImage ReadBmp(int fd)
 {
 	BMPImage img;
-
 	FillBMPHeader(fd, &img.header);
 	return img;
 }
 
 
-void ReadBmpImageLittleEndian(int fd, BMPImage *image)
+void WriteDataBigEndian(int bitmap_to_read_fd, int c_file_to_write_fd, BMPImage *image)
 {
-	int i;
+	int i, j;
+	char temp_str[image->header.width_px];
 	uint32_t hex_image_data[image->header.height_px];
 
-	lseek(fd, image->header.offset, SEEK_SET);
-
-	for (i = image->header.height_px - 1; i >= 0; i--) {
-		Read(fd, &hex_image_data[i], 4);
-		hex_image_data[i] = Swap2Bytes(~hex_image_data[i]);
+	memset(image->data, '\0', sizeof image->data);
+	if (Lseek(bitmap_to_read_fd, image->header.offset, SEEK_SET) != image->header.offset) {
+		PRINT_ERR_AND_EXIT("Lseek failed")
 	}
-
-	for (i = 0; i < image->header.height_px; i++) {
-		printf("0x%x, ", (uint16_t) hex_image_data[i]);
+	Print(OUTPUT_TO_FD, "uint16 %s[] = {\n", g_array_name_to_store);
+	for (i = image->header.height_px - 1; i >= 0; i--) { /* flip bitmap */
+		Read(bitmap_to_read_fd, &hex_image_data[i], 4);
+		hex_image_data[i] = Swap2Bytes((~hex_image_data[i])); /* negate, then correct endian */
+		sprintf(temp_str, "0x%4x,\t", hex_image_data[i]);
+		ReplaceSpaces(temp_str);
+		Print(OUTPUT_TO_FD, "\t%s\n", temp_str);
 	}
+	Print(OUTPUT_TO_FD, "};\n\n");
 }
 
 
-BMPImage ReadBmpImageBigEndian(int fd)
+void ReplaceSpaces(char *str)
 {
-
+	while (*str) {
+		if (*str == ' ')
+			*str = '0';
+		str++;
+	}
 }
 
 
 void FillBMPHeader(int fd, BMPHeader *bmp)
 {
 	/* (54 bytes) */
-	IoRead(fd, &bmp->type, 2);              /* Magic identifier: 0x4d42 */
-	IoRead(fd, &bmp->size, 4);              /* File size in bytes */
-	IoRead(fd, &bmp->reserved1, 2);         /* NOT USED */
-	IoRead(fd, &bmp->reserved2, 2);         /* NOT USED */
-	IoRead(fd, &bmp->offset, 4);            /* Offset to image data in bytes from beginning of file */
-	IoRead(fd, &bmp->dib_header_size, 4);   /* DIB Header size in bytes (40 bytes) */
-	IoRead(fd, &bmp->width_px, 4);          /* Width of the image */
-	IoRead(fd, &bmp->height_px, 4);         /* Height of the image */
-	IoRead(fd, &bmp->num_planes, 2);        /* Number of color planes */
-	IoRead(fd, &bmp->bits_per_pixel, 2);    /* Bits per pixel */
-	IoRead(fd, &bmp->compression, 4);       /* Compression type */
-	IoRead(fd, &bmp->image_size_bytes, 4);  /* Image size in bytes */
-	IoRead(fd, &bmp->x_resolution_ppm, 4);  /* Pixels per meter */
-	IoRead(fd, &bmp->y_resolution_ppm, 4);  /* Pixels per meter */
-	IoRead(fd, &bmp->num_colors, 4);        /* Number of colors */
-	IoRead(fd, &bmp->important_colors, 4);  /* Important colors */
+	IoRead(fd, &bmp->type, 2);
+	IoRead(fd, &bmp->size, 4);
+	IoRead(fd, &bmp->reserved1, 2);
+	IoRead(fd, &bmp->reserved2, 2);
+	IoRead(fd, &bmp->offset, 4);
+	IoRead(fd, &bmp->dib_header_size, 4);
+	IoRead(fd, &bmp->width_px, 4);
+	IoRead(fd, &bmp->height_px, 4);
+	IoRead(fd, &bmp->num_planes, 2);
+	IoRead(fd, &bmp->bits_per_pixel, 2);
+	IoRead(fd, &bmp->compression, 4);
+	IoRead(fd, &bmp->image_size_bytes, 4);
+	IoRead(fd, &bmp->x_resolution_ppm, 4);
+	IoRead(fd, &bmp->y_resolution_ppm, 4);
+	IoRead(fd, &bmp->num_colors, 4);
+	IoRead(fd, &bmp->important_colors, 4);
 }
 
 
-void PrintBitmapDetails(BMPHeader header)
+void PrintBmpHeader(BMPHeader header)
 {
-	printf("\n===== BITMAP DETAILS =====\n\n");
-
-	printf("type: %d\n", header.type);
-	printf("size: %d\n", header.size);
-	printf("reserved1: %d\n", header.reserved1);
-	printf("reserved2: %d\n", header.reserved2);
-	printf("header.offset: %d\n", header.offset);
-	printf("header.dib_header_size: %d\n", header.dib_header_size);
-	printf("header.width_px: %d\n", header.width_px);
-	printf("header.height_px: %d\n", header.height_px);
-	printf("header.num_planes: %d\n", header.num_planes);
-	printf("header.bits_per_pixel: %d\n", header.bits_per_pixel);
-	printf("header.compression: %d\n", header.compression);
-	printf("header.image_size_bytes: %d\n", header.image_size_bytes);
-	printf("header.x_resolution_ppm: %d\n", header.x_resolution_ppm);
-	printf("header.y_resolution_ppm: %d\n", header.y_resolution_ppm);
-	printf("header.num_colors: %d\n", header.num_colors);
-	printf("header.important_colors: %d\n", header.important_colors);
-
+	Print(OUTPUT_TO_FD, "/*\tCopyright (c) 2019, Tofu von Helmholtz aka Michael S. Walker\n"
+						" *\tAll Rights Reserved in all Federations, including Alpha Centauris.\n"
+						" *\n"
+						" *\tGenerated with BitmapRipper:\n"
+						" *\twww.github.com/heapsmash/Monochrome-Bitmap-Converter\n"
+						" *\n"
+						" *\t\t\t-= [Bitmap Header Data] =-\n"
+						" *\ttype: %x\t\t\t(Magic identifier: 0x4d42)\n"
+						" *\tsize: %d\t\t\t(File size in bytes)\n"
+						" *\treserved1: %d\t\t\t(NOT USED)\n"
+						" *\treserved2: %d\t\t\t(NOT USED)\n"
+						" *\toffset: %d\t\t\t(Offset to image data in bytes from beginning of file [54 bytes])\n"
+						" *\tdib_header_size: %d\t\t(DIB Header size in bytes [40 bytes])\n"
+						" *\twidth_px: %d\t\t\t(Width of the image)\n"
+						" *\theight_px: %d\t\t\t(Height of the image)\n"
+						" *\tnum_planes: %d\t\t\t(Number of color planes)\n"
+						" *\tbits_per_pixel: %d\t\t(Bits per pixel)\n"
+						" *\tcompression: %d\t\t\t(Compression type)\n"
+						" *\timage_size_bytes: %d\t\t(Image size in bytes)\n"
+						" *\tx_resolution_ppm: %d\t\t(Pixels per meter)\n"
+						" *\ty_resolution_ppm: %d\t\t(Pixels per meter)\n"
+						" *\tnum_colors: %d\t\t\t(Number of colors)\n"
+						" *\timportant_colors: %d\t\t(Important colors)\n"
+						" *\t\t\t-====================-\n"
+						" */\n\n", header.type, header.size, header.reserved1, header.reserved2,
+		  header.offset, header.dib_header_size, header.width_px, header.height_px, header.num_planes,
+		  header.bits_per_pixel, header.compression, header.image_size_bytes, header.x_resolution_ppm,
+		  header.y_resolution_ppm, header.num_colors, header.important_colors);
 }
 
 

@@ -1,5 +1,5 @@
 /*	Copyright (c) 2019, Tofu von Helmholtz aka Michael S. Walker
- *	All rights reserved.
+ *	All Rights Reserved in all Federations, including Alpha Centauris.
  *
  *	Redistribution and use in source and binary forms, with or without
  *	modification, are permitted provided that the following conditions are met:
@@ -29,18 +29,32 @@
 #ifndef BMP_RIP_BMP_H
 #define BMP_RIP_BMP_H
 
-#include <stdint.h>
+#include <stdint.h> /* for uintxx_t */
+#include "errlib.h" /* for CHECK_SIZE */
+#include <errno.h>  /* for CHECK_SIZE */
+
+#define MAX_DATA 40000
 
 #if defined(__linux__) && defined(__x86_64__)
 #define __FILE_MAX__ FILENAME_MAX
-char g_save_file_name[__FILE_MAX__];
+#define __ARRAY_MAX__ 25
 #else
-#define __FILE_MAX__ 10 /* Size depends on system, i'm to lazy to check the Atari ST sizes ... RTFM */
-char g_save_file_name[__FILE_MAX__];
+#define __FILE_MAX__ 10 /* Size depends on system, i'm to lazy to check the Atari ST sizes ... RTFM & replace */
+#define __ARRAY_MAX__ __FILE_MAX__
 #endif
 
-const char *g_usage = "g_usage: ./%s [-h] [-e] -f <file_name.bmp> -a <array_name_to_export> -s <name_to_save.c>";
-int g_endian;
+char *g_file_name_to_save;
+char *g_file_name_to_read;
+char *g_array_name_to_store;
+
+const char *g_usage = "g_usage: ./bmp_rip -f <file_name_to_read.bmp> -a <array_name_to_store> -s <file_name_to_save.c>";
+
+#define OUTPUT_TO_FD 1 /* 1 for testing */
+
+#define CHECK_SIZE(arg, x) if (strlen((arg)) >= (x)) { \
+    errno = 36; \
+    PRINT_ERRNO_AND_RETURN("optarg error"); \
+    }
 
 typedef struct _BMPHeader {    /* Total: 54 bytes */
 	uint16_t type;             /* Magic identifier: 0x4d42 */
@@ -63,12 +77,14 @@ typedef struct _BMPHeader {    /* Total: 54 bytes */
 
 typedef struct _BMPImage {
 	BMPHeader header;
-	unsigned char *data;
+	char data[MAX_DATA];
 } BMPImage;
 
-void PrintBitmapDetails(BMPHeader header);
+void PrintBmpHeader(BMPHeader header);
 void FillBMPHeader(int fd, BMPHeader *bmp);
-void ReadBmpImageLittleEndian(int fd, BMPImage *image);
+void WriteDataBigEndian(int bitmap_to_read_fd, int c_file_to_write_fd, BMPImage *image);
+void ReplaceSpaces(char *str);
+
 BMPImage ReadBmp(int fd);
 
 #endif //BMP_RIP_BMP_H

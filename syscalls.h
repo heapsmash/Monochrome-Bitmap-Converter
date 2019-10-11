@@ -1,5 +1,5 @@
 /*	Copyright (c) 2019, Tofu von Helmholtz aka Michael S. Walker
- *	All rights reserved.
+ *	All Rights Reserved in all Federations, including Alpha Centauris.
  *
  *	Redistribution and use in source and binary forms, with or without
  *	modification, are permitted provided that the following conditions are met:
@@ -33,8 +33,9 @@
 
 /* Syscall wrappers */
 int Open(const char *file_name, mode_t arg_flags, ...);
-ssize_t IoRead(int fd, void *usrbuf, size_t n);
 ssize_t Write(int fd, const void *buf, size_t count);
+void Print(int file_handle, const char *fmt, ...);
+ssize_t IoRead(int fd, void *usrbuf, size_t n);
 ssize_t Read(int fd, void *buf, size_t count);
 off_t Lseek(int fd, off_t offset, int whence);
 void Close(int fd);

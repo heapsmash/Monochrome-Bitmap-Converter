@@ -4,4 +4,4 @@ project(bmp_rip C)
 set(CMAKE_C_STANDARD 11)
 
 add_executable(bmp_rip
-        bmp.c syscalls.c syscalls.h bmp.h lib/errlib.h lib/endianlib.h)
+        bmp.c syscalls.c syscalls.h bmp.h errlib.h endianlib.h)
