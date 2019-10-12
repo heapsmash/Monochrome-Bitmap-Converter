@@ -31,6 +31,18 @@
 
 #include <sys/types.h> /* for mode_t, size_t and ssize_t */
 
+#define ERR(format, ...) fprintf(stderr, "-> error in %s() line %d\n"format"\n", __func__, __LINE__, ##__VA_ARGS__)
+#define ERRNO(format, ...) fprintf(stderr, "-> error in %s() line %d\n"format": %s\n", __func__, __LINE__, ##__VA_ARGS__, strerror(errno))
+
+#define PRINT_ERRNO_AND_RETURN(format, ...) ERRNO(format, ##__VA_ARGS__); \
+        return(EXIT_FAILURE);
+#define PRINT_ERRNO_AND_EXIT(format, ...) ERRNO(format, ##__VA_ARGS__); \
+        exit(EXIT_FAILURE);
+#define PRINT_ERR_AND_RETURN(format, ...) ERR(format, ##__VA_ARGS__); \
+        return(EXIT_FAILURE);
+#define PRINT_ERR_AND_EXIT(format, ...) ERR(format, ##__VA_ARGS__); \
+        exit(EXIT_FAILURE);
+
 /* Syscall wrappers */
 int Open(const char *file_name, mode_t arg_flags, ...);
 ssize_t Write(int fd, const void *buf, size_t count);

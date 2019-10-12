@@ -38,7 +38,6 @@
 #include <fcntl.h>
 #include <stdarg.h>
 #include <unistd.h>
-#include "errlib.h"
 #include "syscalls.h"
 
 
