@@ -36,10 +36,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <zconf.h>
-
 #include "syscalls.h"
-#include "errlib.h"
-#include "endianlib.h"
 #include "bmp.h"
 
 
@@ -47,10 +44,11 @@ int main(int argc, char *argv[], char *envp[])
 {
 	int opt;
 	BitRipTools bitmap;
+	uint32_t (*SwapEndian)(uint32_t);
 
 	bitmap.ncols_per_row = 1;
 	bitmap.file_name_to_read = bitmap.array_name_to_store = bitmap.file_name_to_save = NULL;
-	while ((opt = getopt(argc, argv, "f:a:s:")) != -1) {
+	while ((opt = getopt(argc, argv, "n:f:a:s:")) != -1) {
 		switch (opt) {
 			case 'f':
 				CHECK_SIZE(optarg, __FILE_MAX__)
@@ -77,39 +75,81 @@ int main(int argc, char *argv[], char *envp[])
 		PRINT_ERR_AND_RETURN("%s", g_usage)
 	}
 
+	/* sanity check */
 	if ((errno == ERANGE && (bitmap.ncols_per_row == LONG_MAX || bitmap.ncols_per_row == LONG_MIN)) ||
 		(errno != 0 && bitmap.ncols_per_row == 0)) {
 		PRINT_ERRNO_AND_RETURN("-n value obfuscated")
 	}
 
 	bitmap.bitmap_to_read_fd = Open(bitmap.file_name_to_read, O_RDONLY, 0);
-	bitmap.c_file_to_write_fd = Open(bitmap.file_name_to_save, O_RDWR | O_CREAT | O_TRUNC, 0664);
+	bitmap.c_file_to_write_fd = Open(bitmap.file_name_to_save, O_RDWR | O_CREAT | O_TRUNC, UMASK);
 
 	ReadBitmapHeader(&bitmap);
+	switch (bitmap.header.width_px) {
+		case 32:
+			SwapEndian = Swap32;
+			break;
+		case 16:
+			SwapEndian = Swap16;
+			break;
+		case 8:
+			SwapEndian = Swap8;
+			break;
+		default:
+		PRINT_ERR_AND_RETURN("Width must be 1bpp at 8px 16px 32px")
+	}
+
 	WriteCommentToFile(bitmap);
-	WriteArrayToFile(&bitmap);
+	WriteArrayToFile(&bitmap, SwapEndian);
+
+	Close(bitmap.bitmap_to_read_fd);
+	Close(bitmap.c_file_to_write_fd);
 
 	return 0;
 }
 
 
-void WriteArrayToFile(BitRipTools *data)
+void WriteArrayToFile(BitRipTools *data, uint32_t(*Swap)(uint32_t))
 {
-	int i;
+	int i, n_nibbles;
+	char *format, *format_end;
+
 	uint32_t hex_image_data[data->header.height_px];
+
+	n_nibbles = data->header.width_px / 4;
+
+	switch (n_nibbles) {
+		case 2: /* uint8_t */
+			format = "\t0x%02x,";
+			format_end = "\t0x%02x\n";
+			break;
+		case 4: /* uint16_t */
+			format = "\t0x%04x,";
+			format_end = "\t0x%04x\n";
+			break;
+		case 8: /* uint32_t */
+			format = "\t0x%08x,";
+			format_end = "\t0x%08x\n";
+			break;
+		default:
+			return;
+	}
 
 	if (Lseek(data->bitmap_to_read_fd, data->header.offset, SEEK_SET) != data->header.offset) {
 		PRINT_ERR_AND_EXIT("Lseek failed")
 	}
 
-	Print(data->c_file_to_write_fd, "uint16 %s[] = {\n", data->array_name_to_store);
-	for (i = data->header.height_px - 1; i >= 0; i--) { /* flip bitmap */
-		Read(data->bitmap_to_read_fd, &hex_image_data[i], 4);
-		hex_image_data[i] = Swap2Bytes((~hex_image_data[i])); /* negate, then correct endian */
-		Print(data->c_file_to_write_fd, "0x%04x,\t", hex_image_data[i]);
+	Print(data->c_file_to_write_fd, "const uint%d %s[] = {\n", data->header.width_px, data->array_name_to_store);
+	for (i = data->header.height_px - 1; i > 0; i--) { /* vertically flip bitmap */
+		Read(data->bitmap_to_read_fd, &hex_image_data[i], n_nibbles);
+		hex_image_data[i] = Swap((~hex_image_data[i])); /* negate, then correct endian */
+		Print(data->c_file_to_write_fd, format, hex_image_data[i]);
+		if (i % data->ncols_per_row == 0)
+			Print(data->c_file_to_write_fd, "\n");
 	}
 
-	Print(data->c_file_to_write_fd, "};\n\n");
+	Print(data->c_file_to_write_fd, format_end, hex_image_data[i]);
+	Print(data->c_file_to_write_fd, "}; /* Generated with BitRip */ \n\n");
 }
 
 
@@ -157,7 +197,7 @@ void WriteCommentToFile(BitRipTools data)
 			data.header.important_colors
 	};
 
-	Print(data.c_file_to_write_fd, "/*\tCopyright (c) 2019, Michael S. Walker (Tofu)\n");
+	Print(data.c_file_to_write_fd, "/*\tCopyright (c) 2019, Michael S. Walker <sigmatau@heapsmash.com>\n");
 	Print(data.c_file_to_write_fd, " *\tAll Rights Reserved in all Federations, including Alpha Centauris.\n");
 	Print(data.c_file_to_write_fd, " *\n");
 	Print(data.c_file_to_write_fd, " *\t.--.https://github.com/heapsmash/Monochrome-Bitmap-Converter-----------.\n");
@@ -170,6 +210,25 @@ void WriteCommentToFile(BitRipTools data)
 		Print(data.c_file_to_write_fd, " *\t:--+-------------------+-------+---------------------------------------:\n");
 	}
 	Print(data.c_file_to_write_fd, " */\n\n");
+}
+
+
+uint32_t Swap32(uint32_t x)
+{
+	return ((((x >> 24) & 0x000000FF) | (((x >> 8) & 0x0000FF00) | (((x << 8) & 0x00FF0000) | (((x << 24) & 0xFF000000))))));
+}
+
+
+uint32_t Swap16(uint32_t x)
+{
+
+	return ((((x) >> 8) & 0x00FF) | (((x) << 8) & 0xFF00));
+}
+
+
+uint32_t Swap8(uint32_t x)
+{
+	return x;
 }
 
 

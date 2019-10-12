@@ -30,14 +30,15 @@
 #define BMP_RIP_BMP_H
 
 #include <stdint.h> /* for uintxx_t */
-#include "errlib.h" /* for CHECK_SIZE */
 #include <errno.h>  /* for CHECK_SIZE */
 
 #if defined(__linux__) && defined(__x86_64__)
+
 #define __FILE_MAX__ FILENAME_MAX
 #define __ARRAY_MAX__ 25
-#else	/* future implementation to run on atari ST */
-#define __FILE_MAX__ 10 /* Size depends on system, i'm to lazy to check the Atari ST sizes ... RTFM & replace */
+#else
+
+#define __FILE_MAX__ 10 /* Size depends on system, 10 seems like a safe number */
 #define __ARRAY_MAX__ __FILE_MAX__
 #endif
 
@@ -45,6 +46,8 @@
     errno = 36; \
     PRINT_ERRNO_AND_RETURN("optarg error"); \
     }
+
+#define UMASK 0664 /* [User: rw] [Group: rw] [Other: r] */
 
 const char *g_header_names[] = {
 		"type:",
@@ -83,6 +86,7 @@ const char *g_header_description[] = {
 		"(Number of colors)",
 		"(Important colors)"
 };
+
 const char *g_usage = "g_usage: ./bit_rip [-n number of columns to write] -f <input filename . bmp>  -a <array name for bitmap> -s <output file name . c>";
 
 typedef struct _BMPHeader {    /* Total: 54 bytes */
@@ -111,8 +115,12 @@ typedef struct _BMPImageTools {
 	char *file_name_to_save, *file_name_to_read, *array_name_to_store;
 } BitRipTools;
 
+uint32_t Swap8(uint32_t x);
+uint32_t Swap16(uint32_t x);
+uint32_t Swap32(uint32_t x);
+
+void WriteArrayToFile(BitRipTools *data, uint32_t(*Swap)(uint32_t));
 void WriteCommentToFile(BitRipTools data);
-void WriteArrayToFile(BitRipTools *data);
 void ReadBitmapHeader(BitRipTools *data);
 
 #endif //BMP_RIP_BMP_H
