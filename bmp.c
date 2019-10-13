@@ -43,8 +43,8 @@
 int main(int argc, char *argv[], char *envp[])
 {
 	int opt;
+	void (*WriteDataToArray)(BitRipTools *) = NULL;
 	BitRipTools bitmap;
-	uint32_t (*SwapEndian)(uint32_t);
 
 	bitmap.ncols_per_row = 1;
 	bitmap.file_name_to_read = bitmap.array_name_to_store = bitmap.file_name_to_save = NULL;
@@ -86,21 +86,19 @@ int main(int argc, char *argv[], char *envp[])
 
 	ReadBitmapHeader(&bitmap);
 	switch (bitmap.header.width_px) {
-		case 32:
-			SwapEndian = Swap32;
-			break;
 		case 16:
-			SwapEndian = Swap16;
+			WriteDataToArray = ReadDataUint16;
 			break;
 		case 8:
-			SwapEndian = Swap8;
+			WriteDataToArray = ReadDataUint8;
 			break;
 		default:
-		PRINT_ERR_AND_RETURN("Width must be 1bpp at 8px 16px 32px")
+			WriteDataToArray = ReadDataUint32;
+			break;
 	}
 
 	WriteCommentToFile(bitmap);
-	WriteArrayToFile(&bitmap, SwapEndian);
+	WriteDataToArray(&bitmap);
 
 	Close(bitmap.bitmap_to_read_fd);
 	Close(bitmap.c_file_to_write_fd);
@@ -109,46 +107,85 @@ int main(int argc, char *argv[], char *envp[])
 }
 
 
-void WriteArrayToFile(BitRipTools *data, uint32_t(*Swap)(uint32_t))
+void ReadDataUint8(BitRipTools *data)
 {
-	int i, n_nibbles;
-	char *format, *format_end;
-
-	uint32_t hex_image_data[data->header.height_px];
-
-	n_nibbles = data->header.width_px / 4;
-
-	switch (n_nibbles) {
-		case 2: /* uint8_t */
-			format = "\t0x%02x,";
-			format_end = "\t0x%02x\n";
-			break;
-		case 4: /* uint16_t */
-			format = "\t0x%04x,";
-			format_end = "\t0x%04x\n";
-			break;
-		case 8: /* uint32_t */
-			format = "\t0x%08x,";
-			format_end = "\t0x%08x\n";
-			break;
-		default:
-			return;
-	}
+	int nread;
+	uint32_t *temp_data = calloc((data->header.height_px * data->header.width_px) + 1, 1);
 
 	if (Lseek(data->bitmap_to_read_fd, data->header.offset, SEEK_SET) != data->header.offset) {
 		PRINT_ERR_AND_EXIT("Lseek failed")
 	}
 
+	nread = IoRead(data->bitmap_to_read_fd, temp_data, data->header.image_size_bytes);
+	if (nread < 0) {
+		PRINT_ERRNO_AND_EXIT("IoRead error")
+	}
+	nread >>= 2;
+
 	Print(data->c_file_to_write_fd, "const uint%d %s[] = {\n", data->header.width_px, data->array_name_to_store);
-	for (i = data->header.height_px - 1; i > 0; i--) { /* vertically flip bitmap */
-		Read(data->bitmap_to_read_fd, &hex_image_data[i], n_nibbles);
-		hex_image_data[i] = Swap((~hex_image_data[i])); /* negate, then correct endian */
-		Print(data->c_file_to_write_fd, format, hex_image_data[i]);
-		if (i % data->ncols_per_row == 0)
+	for (nread = nread - 1; nread >= 0; nread--) {
+		temp_data[nread] = ~temp_data[nread];
+		temp_data[nread] = temp_data[nread] & 0x000000ff;
+		printf("0x%02x,\n", temp_data[nread]);
+	}
+}
+
+
+void ReadDataUint16(BitRipTools *data)
+{
+	int nread;
+	uint32_t *temp_data = calloc((data->header.height_px * data->header.width_px) + 1, 1);
+
+	if (Lseek(data->bitmap_to_read_fd, data->header.offset, SEEK_SET) != data->header.offset) {
+		PRINT_ERR_AND_EXIT("Lseek failed")
+	}
+
+	nread = IoRead(data->bitmap_to_read_fd, temp_data, data->header.image_size_bytes);
+	if (nread < 0) {
+		PRINT_ERRNO_AND_EXIT("IoRead error")
+	}
+	nread >>= 2;
+
+	Print(data->c_file_to_write_fd, "const uint%d %s[] = {\n", data->header.width_px, data->array_name_to_store);
+	for (nread = nread - 1; nread >= 0; nread--) {
+		temp_data[nread] = ENDIAN16(temp_data[nread]);
+		temp_data[nread] = ~temp_data[nread];
+		temp_data[nread] &= 0x0000ffff;
+		printf("0x%04x,\n", temp_data[nread]);
+	}
+}
+
+
+void ReadDataUint32(BitRipTools *data)
+{
+	int nread;
+	uint32_t *temp_data = calloc((data->header.height_px * data->header.width_px) + 1, 1);
+
+	if (Lseek(data->bitmap_to_read_fd, data->header.offset, SEEK_SET) != data->header.offset) {
+		PRINT_ERR_AND_EXIT("Lseek failed")
+	}
+
+	nread = IoRead(data->bitmap_to_read_fd, temp_data, data->header.image_size_bytes);
+	if (nread < 0) {
+		PRINT_ERRNO_AND_EXIT("IoRead error")
+	}
+	nread >>= 2;
+	Print(data->c_file_to_write_fd, "const unsigned int g_%s_height = %d;\t/* height in bits */ \n", data->array_name_to_store,
+		  data->header.height_px);
+	Print(data->c_file_to_write_fd, "const unsigned int g_%s_width = %d;\t/* width in bits */\n", data->array_name_to_store, data->header.width_px);
+	Print(data->c_file_to_write_fd, "const unsigned int g_%s_size = %d;\t/* total bytes */\n\n", data->array_name_to_store,
+		  data->header.image_size_bytes);
+
+	Print(data->c_file_to_write_fd, "const uint32_t %s[] = {\n", data->array_name_to_store);
+	for (nread = nread - 1; nread > 0; nread--) {
+		temp_data[nread] = ENDIAN32(temp_data[nread]);
+		temp_data[nread] = ~temp_data[nread];
+		Print(data->c_file_to_write_fd, "\t0x%08x,", temp_data[nread]);
+		if (nread % data->ncols_per_row == 0)
 			Print(data->c_file_to_write_fd, "\n");
 	}
 
-	Print(data->c_file_to_write_fd, format_end, hex_image_data[i]);
+	Print(data->c_file_to_write_fd, "\t0x%08x\n", temp_data[nread]);
 	Print(data->c_file_to_write_fd, "}; /* Generated with BitRip */ \n\n");
 }
 
@@ -197,7 +234,7 @@ void WriteCommentToFile(BitRipTools data)
 			data.header.important_colors
 	};
 
-	Print(data.c_file_to_write_fd, "/*\tCopyright (c) 2019, Michael S. Walker <sigmatau@heapsmash.com>\n");
+	Print(data.c_file_to_write_fd, "/*\tBitRip Copyright (c) 2019, Michael S. Walker <sigmatau@heapsmash.com>\n");
 	Print(data.c_file_to_write_fd, " *\tAll Rights Reserved in all Federations, including Alpha Centauris.\n");
 	Print(data.c_file_to_write_fd, " *\n");
 	Print(data.c_file_to_write_fd, " *\t.--.https://github.com/heapsmash/Monochrome-Bitmap-Converter-----------.\n");
@@ -205,30 +242,12 @@ void WriteCommentToFile(BitRipTools data)
 	Print(data.c_file_to_write_fd, " *\t:--+-------------------+-------+---------------------------------------:\n");
 	Print(data.c_file_to_write_fd, " *\t|  | %-17s | %-5x | %-37s |\n", g_header_names[0], header_values[0], g_header_description[0]);
 	Print(data.c_file_to_write_fd, " *\t:--+-------------------+-------+---------------------------------------:\n");
-	for (i = 1; i < data.header.height_px; i++) {
+
+	for (i = 1; i < sizeof header_values / sizeof(int); i++) {
 		Print(data.c_file_to_write_fd, " *\t|  | %-17s | %-5d | %-37s |\n", g_header_names[i], header_values[i], g_header_description[i]);
 		Print(data.c_file_to_write_fd, " *\t:--+-------------------+-------+---------------------------------------:\n");
 	}
 	Print(data.c_file_to_write_fd, " */\n\n");
-}
-
-
-uint32_t Swap32(uint32_t x)
-{
-	return ((((x >> 24) & 0x000000FF) | (((x >> 8) & 0x0000FF00) | (((x << 8) & 0x00FF0000) | (((x << 24) & 0xFF000000))))));
-}
-
-
-uint32_t Swap16(uint32_t x)
-{
-
-	return ((((x) >> 8) & 0x00FF) | (((x) << 8) & 0xFF00));
-}
-
-
-uint32_t Swap8(uint32_t x)
-{
-	return x;
 }
 
 

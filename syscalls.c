@@ -99,20 +99,6 @@ ssize_t Read(int fd, void *buf, size_t count)
 }
 
 
-ssize_t Write(int fd, const void *buf, size_t count)
-{
-	ssize_t n_written = syscall(SYS_write, fd, buf, count);
-
-	if (n_written >= 0)
-		return n_written;
-
-	if (errno == EINTR) /* Interrupted by sig handler return */
-		return -1;
-
-	PRINT_ERRNO_AND_EXIT("Write error") /* errno set by Write() */
-}
-
-
 off_t Lseek(int fd, off_t offset, int whence)
 {
 	off_t result_offset = syscall(SYS_lseek, fd, offset, whence);

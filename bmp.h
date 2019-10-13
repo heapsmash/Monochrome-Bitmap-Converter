@@ -31,6 +31,28 @@
 
 #include <stdint.h> /* for uintxx_t */
 #include <errno.h>  /* for CHECK_SIZE */
+#include <endian.h>
+
+#if __BYTE_ORDER == __BIG_ENDIAN
+
+#define ENDIAN16(val) val
+#define ENDIAN32(val) val
+#define ENDIAN64(val) val
+#else
+
+#define ENDIAN16(val) \
+ ( (((val) >> 8) & 0x00FF) | (((val) << 8) & 0xFF00) )
+
+#define ENDIAN32(val) \
+ ( (((val) >> 24) & 0x000000FF) | (((val) >>  8) & 0x0000FF00) | \
+   (((val) <<  8) & 0x00FF0000) | (((val) << 24) & 0xFF000000) )
+
+#define ENDIAN64(val) \
+ ( (((val) >> 56) & 0x00000000000000FF) | (((val) >> 40) & 0x000000000000FF00) | \
+   (((val) >> 24) & 0x0000000000FF0000) | (((val) >>  8) & 0x00000000FF000000) | \
+   (((val) <<  8) & 0x000000FF00000000) | (((val) << 24) & 0x0000FF0000000000) | \
+   (((val) << 40) & 0x00FF000000000000) | (((val) << 56) & 0xFF00000000000000) )
+#endif
 
 #if defined(__linux__) && defined(__x86_64__)
 
@@ -115,12 +137,11 @@ typedef struct _BMPImageTools {
 	char *file_name_to_save, *file_name_to_read, *array_name_to_store;
 } BitRipTools;
 
-uint32_t Swap8(uint32_t x);
-uint32_t Swap16(uint32_t x);
-uint32_t Swap32(uint32_t x);
-
-void WriteArrayToFile(BitRipTools *data, uint32_t(*Swap)(uint32_t));
 void WriteCommentToFile(BitRipTools data);
 void ReadBitmapHeader(BitRipTools *data);
-
+void ReadDataUint8(BitRipTools *data);
+void ReadDataUint16(BitRipTools *data);
+void ReadDataUint32(BitRipTools *data);
+uint32_t rotr32(uint32_t n, unsigned int c);
+uint32_t rotl32(uint32_t n, unsigned int c);
 #endif //BMP_RIP_BMP_H
