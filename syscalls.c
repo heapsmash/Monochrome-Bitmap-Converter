@@ -26,7 +26,7 @@ int Open(const char *file_name, mode_t arg_flags, ...)
 #ifdef __OPEN_NEEDS_MODE
 	if ((__OPEN_NEEDS_MODE(arg_flags)) != 0) {
 #else
-		if ((arg_flags & O_CREAT) != 0) {
+	if ((arg_flags & O_CREAT) != 0) {
 #endif //__OPEN_NEEDS_MODE
 		va_start(ap, arg_flags);
 		mode = va_arg(ap, mode_t);
