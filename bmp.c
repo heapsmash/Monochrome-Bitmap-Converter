@@ -136,7 +136,7 @@ int WriteDataUint8(BitRipTools *data)
 	Print(data->c_file_to_write_fd, "const unsigned int g_%s_size = %d; /* total bytes */\n\n", data->array_name_to_store, data->header.image_size_bytes);
 
 	Print(data->c_file_to_write_fd, "const uint%d_t %s[] = {\n", data->header.width_px, data->array_name_to_store);
-	for (nread = nread - 1; nread > 0; nread--) {
+	for (nread = nread - 1; nread >= 0; nread--) {
 		temp_data[nread] = ~temp_data[nread];
 		temp_data[nread] = temp_data[nread] & 0x000000ff;
 		Print(data->c_file_to_write_fd, "\t0x%02x,", temp_data[nread]);
@@ -144,7 +144,6 @@ int WriteDataUint8(BitRipTools *data)
 			Print(data->c_file_to_write_fd, "\n");
 		}
 
-	Print(data->c_file_to_write_fd, "\t0x%04x\n", temp_data[nread]);
 	Print(data->c_file_to_write_fd, "}; /* Generated with BitRip <sigmatau@heapsmash.com> */ \n\n");
 	write_status = 0;
 
@@ -181,7 +180,7 @@ int WriteDataUint16(BitRipTools *data)
 	Print(data->c_file_to_write_fd, "const unsigned int g_%s_size = %d; /* total bytes */\n\n", data->array_name_to_store, data->header.image_size_bytes);
 
 	Print(data->c_file_to_write_fd, "const uint%d_t %s[] = {\n", data->header.width_px, data->array_name_to_store);
-	for (nread = nread - 1; nread > 0; nread--) {
+	for (nread = nread - 1; nread >= 0; nread--) {
 		temp_data[nread] = ENDIAN16(temp_data[nread]);
 		temp_data[nread] = ~temp_data[nread];
 		temp_data[nread] &= 0x0000ffff;
@@ -190,7 +189,6 @@ int WriteDataUint16(BitRipTools *data)
 			Print(data->c_file_to_write_fd, "\n");
 	}
 
-	Print(data->c_file_to_write_fd, "\t0x%04x\n", temp_data[nread]);
 	Print(data->c_file_to_write_fd, "}; /* Generated with BitRip <sigmatau@heapsmash.com> */ \n\n");
 	write_status = 0;
 
@@ -227,7 +225,7 @@ int WriteDataUint32(BitRipTools *data)
 	Print(data->c_file_to_write_fd, "const unsigned int g_%s_size = %d; /* total bytes */\n\n", data->array_name_to_store, data->header.image_size_bytes);
 
 	Print(data->c_file_to_write_fd, "const uint%d_t %s[] = {\n", data->header.width_px, data->array_name_to_store);
-	for (nread = nread - 1; nread > 0; nread--) {
+	for (nread = nread - 1; nread >= 0; nread--) {
 		temp_data[nread] = ENDIAN32(temp_data[nread]);
 		temp_data[nread] = ~temp_data[nread];
 		Print(data->c_file_to_write_fd, "\t0x%08x,", temp_data[nread]);
@@ -235,7 +233,6 @@ int WriteDataUint32(BitRipTools *data)
 			Print(data->c_file_to_write_fd, "\n");
 	}
 
-	Print(data->c_file_to_write_fd, "\t0x%08x\n", temp_data[nread]);
 	Print(data->c_file_to_write_fd, "}; /* Generated with BitRip <sigmatau@heapsmash.com> */ \n\n");
 	write_status = 0;
 
@@ -246,7 +243,7 @@ io_error:
 
 int ReadBitmapHeader(BitRipTools *data)
 {
-	/* (54 bytes) */
+	/* This is a really lazy way to use read future update to read once and parse (54 bytes) */
 	if (IoRead(data->bitmap_to_read_fd, &data->header.type, 2) < 0)
 		return -1; 
 
