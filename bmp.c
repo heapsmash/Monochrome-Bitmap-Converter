@@ -316,7 +316,7 @@ void WriteCommentToFile(BitRipTools data)
 			data.header.important_colors
 	};
 
-	Print(data.c_file_to_write_fd, "/*\tBitRip Copyleft !(c) 2019, Michael S. Walker <sigmatau@heapsmash.com>\n");
+	Print(data.c_file_to_write_fd, "/*\tBitRip Copyleft !(c) 2020, Michael S. Walker <mwalk762@mtroyal.ca>\n");
 	Print(data.c_file_to_write_fd, " *\tAll Rights Unreserved in all Federations, including Alpha Centauris.\n");
 	Print(data.c_file_to_write_fd, " *\n");
 	Print(data.c_file_to_write_fd, " *\t.--. https://github.com/heapsmash/Monochrome-Bitmap-Converter ---------.\n");
